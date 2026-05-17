@@ -488,11 +488,12 @@ function StudyView({ deck, cards, mode, onReview, onBack, onFinish }) {
   const [finished, setFinished] = useState(false);
 
   // Recalculate queue when newLimit changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     setQueue(buildQueue());
     setCurrent(0);
     setFlipped(false);
-  }, [newLimit]);
+  }, [newLimit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const card = queue[current];
   const remaining = queue.length - current;
