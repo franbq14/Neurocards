@@ -58,18 +58,23 @@ async function supabaseGet() {
 
 async function supabaseSet(data) {
   try {
-    // Upsert — inserta o actualiza
     await fetch(`${SUPABASE_URL}/rest/v1/sync`, {
       method: "POST",
       headers: {
         "apikey": SUPABASE_KEY,
         "Authorization": `Bearer ${SUPABASE_KEY}`,
         "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates",
+        "Prefer": "resolution=merge-duplicates,return=minimal",
       },
-      body: JSON.stringify({ user_id: USER_ID, data: JSON.stringify(data), updated_at: new Date().toISOString() })
+      body: JSON.stringify({
+        user_id: USER_ID,
+        data: JSON.stringify(data),
+        updated_at: new Date().toISOString()
+      })
     });
-  } catch {}
+  } catch(e) {
+    console.error("Sync error:", e);
+  }
 }
 
 function useLS(key, init) {
