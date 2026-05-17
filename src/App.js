@@ -40,6 +40,38 @@ function defaultDeck(o = {}) {
   return { id: crypto.randomUUID(), name: "Nuevo mazo", color: "#863bff", createdAt: Date.now(), ...o };
 }
 
+// ── SUPABASE SYNC ────────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://hnnlwvsesrcmymcwdinf.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhubmx3dnNlc3JjbXltY3dkaW5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwMjQyNjQsImV4cCI6MjA5NDYwMDI2NH0.GSnWFPfRercc3efHoXMskdBaLrK2EWstizmMlVzlYTM";
+const USER_ID = "fran"; // ID fijo — solo tú usas esta app
+
+async function supabaseGet() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/sync?user_id=eq.${USER_ID}&select=data`, {
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+    });
+    const rows = await res.json();
+    if (rows && rows.length > 0) return JSON.parse(rows[0].data);
+    return null;
+  } catch { return null; }
+}
+
+async function supabaseSet(data) {
+  try {
+    // Upsert — inserta o actualiza
+    await fetch(`${SUPABASE_URL}/rest/v1/sync`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",
+      },
+      body: JSON.stringify({ user_id: USER_ID, data: JSON.stringify(data), updated_at: new Date().toISOString() })
+    });
+  } catch {}
+}
+
 function useLS(key, init) {
   const [val, setVal] = useState(() => {
     try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : (typeof init === "function" ? init() : init); }
@@ -75,6 +107,36 @@ export default function App() {
   const [editingCard, setEditingCard] = useState(null);
   const [showAddDeck, setShowAddDeck] = useState(false);
   const [studyMode, setStudyMode] = useState("due"); // "due" | "all"
+  const [syncStatus, setSyncStatus] = useState("idle"); // idle | syncing | ok | error
+  const syncTimer = useRef(null);
+  const syncRef = useRef(null);
+
+  // ── LOAD from Supabase on mount ──
+  useEffect(() => {
+    setSyncStatus("syncing");
+    supabaseGet().then(remote => {
+      if (remote) {
+        if (remote.decks) setDecks(remote.decks);
+        if (remote.cards) setCards(remote.cards);
+        if (remote.stats) setStats(remote.stats);
+        setSyncStatus("ok");
+      } else {
+        setSyncStatus("ok");
+      }
+    }).catch(() => setSyncStatus("error"));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── SAVE to Supabase — debounced 3s after any change ──
+  useEffect(() => {
+    clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => {
+      setSyncStatus("syncing");
+      supabaseSet({ decks, cards, stats })
+        .then(() => setSyncStatus("ok"))
+        .catch(() => setSyncStatus("error"));
+    }, 3000);
+    return () => clearTimeout(syncTimer.current);
+  }, [decks, cards, stats]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const recordStudy = useCallback(() => {
     const tod = today();
@@ -151,7 +213,7 @@ export default function App() {
           onAddDeck={addDeck} onOpenDeck={d => { setActiveDeck(d); setView("deck"); }}
           onStartStudy={(d, mode) => openStudy(d, mode)}
           showAddDeck={showAddDeck} setShowAddDeck={setShowAddDeck}
-          totalDue={dueCards.length} />
+          totalDue={dueCards.length} syncStatus={syncStatus} />
       )}
       {view === "deck" && activeDeck && (
         <DeckView deck={activeDeck} cards={cards.filter(c => c.deckId === activeDeck.id)}
@@ -179,7 +241,7 @@ export default function App() {
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeView({ decks, cards, stats, dueByDeck, onAddDeck, onOpenDeck, onStartStudy, showAddDeck, setShowAddDeck, totalDue }) {
+function HomeView({ decks, cards, stats, dueByDeck, onAddDeck, onOpenDeck, onStartStudy, showAddDeck, setShowAddDeck, totalDue, syncStatus }) {
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(COLORS[0]);
   const streak = stats.streak || 0;
@@ -202,9 +264,12 @@ function HomeView({ decks, cards, stats, dueByDeck, onAddDeck, onOpenDeck, onSta
             <div style={S.brandSub}>Repetición espaciada · SM-2</div>
           </div>
         </div>
-        <button style={S.btnNew} onClick={() => setShowAddDeck(!showAddDeck)} className="btn-glow">
-          + Nuevo mazo
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div title={syncStatus === "syncing" ? "Sincronizando..." : syncStatus === "ok" ? "Sincronizado" : "Error de sync"} style={{ width: 8, height: 8, borderRadius: "50%", background: syncStatus === "syncing" ? "#ffb03b" : syncStatus === "ok" ? "#3bffa0" : "#ff3b7a", boxShadow: `0 0 6px ${syncStatus === "syncing" ? "#ffb03b" : syncStatus === "ok" ? "#3bffa0" : "#ff3b7a"}` }} />
+          <button style={S.btnNew} onClick={() => setShowAddDeck(!showAddDeck)} className="btn-glow">
+            + Nuevo mazo
+          </button>
+        </div>
       </div>
 
       <div style={S.heroStats}>
