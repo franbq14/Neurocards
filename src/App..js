@@ -114,7 +114,6 @@ export default function App() {
   const [studyMode, setStudyMode] = useState("due"); // "due" | "all"
   const [syncStatus, setSyncStatus] = useState("idle"); // idle | syncing | ok | error
   const syncTimer = useRef(null);
-  const syncRef = useRef(null);
 
   // ── LOAD from Supabase on mount ──
   useEffect(() => {
