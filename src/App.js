@@ -115,23 +115,30 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState("idle"); // idle | syncing | ok | error
   const syncTimer = useRef(null);
 
+  const [syncReady, setSyncReady] = useState(false);
+
   // ── LOAD from Supabase on mount ──
   useEffect(() => {
     setSyncStatus("syncing");
     supabaseGet().then(remote => {
-      if (remote) {
+      if (remote && (
+        (remote.decks && remote.decks.length > 0) ||
+        (remote.cards && remote.cards.length > 0)
+      )) {
+        // Solo sobreescribe si Supabase tiene datos reales
         if (remote.decks) setDecks(remote.decks);
         if (remote.cards) setCards(remote.cards);
         if (remote.stats) setStats(remote.stats);
-        setSyncStatus("ok");
-      } else {
-        setSyncStatus("ok");
       }
-    }).catch(() => setSyncStatus("error"));
+      setSyncStatus("ok");
+      setSyncReady(true);
+    }).catch(() => { setSyncStatus("error"); setSyncReady(true); });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── SAVE to Supabase — debounced 3s after any change ──
+  // Solo empieza a guardar cuando la carga inicial ha terminado
   useEffect(() => {
+    if (!syncReady) return;
     clearTimeout(syncTimer.current);
     syncTimer.current = setTimeout(() => {
       setSyncStatus("syncing");
@@ -140,7 +147,7 @@ export default function App() {
         .catch(() => setSyncStatus("error"));
     }, 3000);
     return () => clearTimeout(syncTimer.current);
-  }, [decks, cards, stats]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [decks, cards, stats, syncReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const recordStudy = useCallback(() => {
     const tod = today();
