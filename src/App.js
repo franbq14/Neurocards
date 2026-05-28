@@ -212,6 +212,8 @@ export default function App() {
     return 0;
   };
 
+  const GLOBAL_DECK = { id: "__global__", name: "Todos los temas", color: "url(#globalGrad)", colorSolid: "#863bff", isGlobal: true };
+
   const openStudy = (deck, mode = "due") => {
     setActiveDeck(deck); setStudyMode(mode); setView("study");
   };
@@ -223,8 +225,9 @@ export default function App() {
         <HomeView decks={decks} cards={cards} stats={stats} dueByDeck={dueByDeck}
           onAddDeck={addDeck} onOpenDeck={d => { setActiveDeck(d); setView("deck"); }}
           onStartStudy={(d, mode) => openStudy(d, mode)}
+          onStartGlobal={(mode) => openStudy(GLOBAL_DECK, mode)}
           showAddDeck={showAddDeck} setShowAddDeck={setShowAddDeck}
-          totalDue={dueCards.length} syncStatus={syncStatus} />
+          totalDue={dueCards.length} syncStatus={syncStatus} globalDeck={GLOBAL_DECK} />
       )}
       {view === "deck" && activeDeck && (
         <DeckView deck={activeDeck} cards={cards.filter(c => c.deckId === activeDeck.id)}
@@ -236,9 +239,11 @@ export default function App() {
       )}
       {view === "study" && activeDeck && (
         <StudyView deck={activeDeck}
-          cards={cards.filter(c => c.deckId === activeDeck.id)}
+          cards={activeDeck.isGlobal ? cards : cards.filter(c => c.deckId === activeDeck.id)}
           mode={studyMode}
-          onReview={reviewCard} onBack={() => setView("deck")} onFinish={() => setView("deck")} />
+          onReview={reviewCard}
+          onBack={() => activeDeck.isGlobal ? setView("home") : setView("deck")}
+          onFinish={() => activeDeck.isGlobal ? setView("home") : setView("deck")} />
       )}
       {view === "addCard" && editingCard && (
         <CardEditor card={editingCard} deckName={activeDeck?.name} deckColor={activeDeck?.color}
@@ -252,11 +257,13 @@ export default function App() {
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeView({ decks, cards, stats, dueByDeck, onAddDeck, onOpenDeck, onStartStudy, showAddDeck, setShowAddDeck, totalDue, syncStatus }) {
+function HomeView({ decks, cards, stats, dueByDeck, onAddDeck, onOpenDeck, onStartStudy, onStartGlobal, showAddDeck, setShowAddDeck, totalDue, syncStatus, globalDeck }) {
   const [newName, setNewName] = useState("");
   const [newColor, setNewColor] = useState(COLORS[0]);
   const streak = stats.streak || 0;
   const mastered = cards.filter(c => isMature(c)).length;
+  const globalDue = cards.filter(isDue).length;
+  const globalNew = cards.filter(isNew).length;
 
   const handleAdd = () => {
     if (!newName.trim()) return;
@@ -314,6 +321,19 @@ function HomeView({ decks, cards, stats, dueByDeck, onAddDeck, onOpenDeck, onSta
         </div>
       )}
 
+      {/* GLOBAL DECK — always visible when there are cards */}
+      {cards.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={S.sectionLabel}>Estudio global</div>
+          <GlobalDeckCard
+            total={cards.length} due={globalDue} newCount={globalNew}
+            mastered={mastered}
+            onStudy={() => onStartGlobal("due")}
+            onStudyAll={() => onStartGlobal("all")}
+          />
+        </div>
+      )}
+
       {decks.length === 0 ? (
         <div style={S.emptyState}>
           <div style={S.emptyIcon}>🃏</div>
@@ -329,6 +349,7 @@ function HomeView({ decks, cards, stats, dueByDeck, onAddDeck, onOpenDeck, onSta
               <span><strong style={{ color: "#ffb03b" }}>{totalDue} tarjetas</strong> esperan repaso hoy</span>
             </div>
           )}
+          <div style={S.sectionLabel}>Mis mazos</div>
           <div style={S.deckGrid}>
             {decks.map(deck => {
               const dc = cards.filter(c => c.deckId === deck.id);
@@ -365,6 +386,47 @@ function HeroStat({ icon, val, label, color, urgent }) {
       <div style={{ fontSize: 22, marginBottom: 4 }}>{icon}</div>
       <div style={{ fontSize: 28, fontWeight: 800, color: val > 0 ? color : "rgba(255,255,255,0.15)", lineHeight: 1, fontFamily: "'Syne', sans-serif" }}>{val}</div>
       <div style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", marginTop: 3 }}>{label}</div>
+    </div>
+  );
+}
+
+function GlobalDeckCard({ total, due, newCount, mastered, onStudy, onStudyAll }) {
+  const pct = total > 0 ? Math.round((mastered / total) * 100) : 0;
+  return (
+    <div style={{ background: "linear-gradient(135deg, rgba(134,59,255,0.15), rgba(255,59,122,0.1))", borderRadius: 16, padding: 20, border: "1px solid rgba(134,59,255,0.3)", position: "relative", overflow: "hidden" }}>
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: "linear-gradient(90deg, #863bff, #ff3b7a, #3bffa0)" }} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: "linear-gradient(135deg, #863bff, #ff3b7a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, boxShadow: "0 4px 16px rgba(134,59,255,0.4)" }}>🌐</div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 17, color: "#fff", fontFamily: "'Syne', sans-serif" }}>Todos los temas</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 2 }}>{total} tarjetas · {pct}% maduras</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {newCount > 0 && <span style={{ background: "#3b82f620", border: "1px solid #3b82f644", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#3b82f6" }}>{newCount} nuevas</span>}
+          {due > 0 && <span style={{ background: "rgba(255,176,59,0.2)", border: "1px solid rgba(255,176,59,0.4)", borderRadius: 20, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "#ffb03b" }}>{due} hoy</span>}
+        </div>
+      </div>
+      <div style={{ height: 3, background: "rgba(255,255,255,0.06)", borderRadius: 2, marginBottom: 14, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #863bff, #ff3b7a)", borderRadius: 2, transition: "width 0.6s" }} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", fontWeight: 700, fontSize: 14,
+          cursor: due === 0 ? "default" : "pointer", fontFamily: "inherit", transition: "all 0.2s",
+          background: due === 0 ? "rgba(255,255,255,0.05)" : "linear-gradient(135deg, #863bff, #ff3b7a)",
+          color: due === 0 ? "rgba(255,255,255,0.2)" : "#fff",
+          boxShadow: due > 0 ? "0 4px 20px rgba(134,59,255,0.4)" : "none",
+        }} onClick={onStudy} disabled={due === 0}>
+          {due === 0 ? "Al día ✓" : `▶ Estudiar ${due} de hoy`}
+        </button>
+        {total > 0 && (
+          <button style={{ padding: "10px 16px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.1)", background: "rgba(255,255,255,0.05)", color: "rgba(255,255,255,0.5)", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}
+            onClick={onStudyAll} title="Estudiar todos los temas">
+            ∞ Todo
+          </button>
+        )}
+      </div>
     </div>
   );
 }
