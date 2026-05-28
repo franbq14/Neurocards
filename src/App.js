@@ -614,8 +614,8 @@ function StudyView({ deck, cards, mode, onReview, onBack, onFinish }) {
     const dueReviews = cards.filter(c => isDue(c) && !isNew(c));
     const failed = dueReviews.filter(c => c.lastQuality === 1);
     const learning = dueReviews.filter(c => c.lastQuality !== 1);
-    // New cards — limitadas a newLimit por sesión
-    const newCards = cards.filter(isNew).slice(0, newLimit);
+    // New cards — aleatorias y limitadas a newLimit por sesión
+    const newCards = cards.filter(isNew).sort(() => Math.random() - 0.5).slice(0, newLimit);
     return [...failed, ...learning, ...newCards];
   }, [cards, mode, newLimit]);
 
